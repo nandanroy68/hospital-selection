@@ -19,3 +19,4 @@ xgboost
 
 # Visualization (optional if you plot maps or charts later)
 matplotlib
+folium
