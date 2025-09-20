@@ -20,6 +20,6 @@ xgboost
 # Visualization (optional if you plot maps or charts later)
 matplotlib
 folium
-streamlit-folium
+streamlit-folium==0.21.0
 st_folium
 
