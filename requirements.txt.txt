@@ -1,0 +1,21 @@
+# Core app
+streamlit
+
+# Data handling
+pandas
+numpy
+
+# API calls
+requests
+openrouteservice
+polyline
+
+# Geo utilities
+geopy
+
+# Machine learning (if you use ML scoring / XGBoost later)
+scikit-learn
+xgboost
+
+# Visualization (optional if you plot maps or charts later)
+matplotlib
