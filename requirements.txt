@@ -21,5 +21,4 @@ xgboost
 matplotlib
 folium
 
-st_folium
 
