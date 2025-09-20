@@ -20,3 +20,5 @@ xgboost
 # Visualization (optional if you plot maps or charts later)
 matplotlib
 folium
+st_folium
+streamlit_folium
