@@ -6,7 +6,7 @@ import joblib
 import requests
 from datetime import datetime
 import folium
-from streamlit_folium import st_folium
+import streamlit.components.v1 as components
 
 # ----------------------------
 # 1. Load ML model & scaler
@@ -224,4 +224,8 @@ elif st.session_state.results:
 
     st.subheader("🗺️ Routes")
     map_obj = plot_routes_map(st.session_state.results, amb_lat, amb_lon)
-    st_folium(map_obj, width=700, height=500)
+    st.subheader("🗺️ Routes")
+    map_obj = plot_routes_map(results, amb_lat, amb_lon)
+    map_html = map_obj._repr_html_()
+    components.html(map_html, height=500, width=700)
+
