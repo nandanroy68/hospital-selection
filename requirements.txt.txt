@@ -1,5 +1,7 @@
 # Core app
 streamlit
+bokeh
+streamlit_bokeh_events
 
 # Data handling
 pandas
@@ -19,3 +21,4 @@ xgboost
 
 # Visualization (optional if you plot maps or charts later)
 matplotlib
+folium

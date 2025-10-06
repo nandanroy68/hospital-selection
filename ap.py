@@ -1,12 +1,13 @@
 import polyline
 import streamlit as st
 import pandas as pd
-import numpy as np
 import joblib
 import requests
 from datetime import datetime
 import folium
+import time
 import streamlit.components.v1 as components
+from streamlit_geolocation import streamlit_geolocation
 
 # ----------------------------
 # 1. Load ML model & scaler
@@ -18,13 +19,20 @@ except:
     st.error("❌ Model or scaler not found. Please train and preprocess first.")
     st.stop()
 
+try:
+    X_train_cols_df = pd.read_csv("processed/X_train.csv", nrows=0)
+    EXPECTED_FEATURE_COLS = X_train_cols_df.columns.tolist()
+except Exception as e:
+    st.error(f"❌ Failed to load expected feature columns: {e}")
+    st.stop()
+
 # ORS API config
 ORS_API_KEY = "5b3ce3597851110001cf6248805552724db09ce9c0cb432eadd12425e379847df7388287d71c0c67"
 ORS_URL = "https://api.openrouteservice.org/v2/directions/driving-car"
 
 # OpenWeather API config (replace with your key)
 WEATHER_API_KEY = "03cc921a8043f443724dbbf1eb9d1481"
-WEATHER_URL = "http://api.openweathermap.org/data/2.5/weather"
+WEATHER_URL = "https://api.openweathermap.org/data/2.5/weather"
 
 # ----------------------------
 # 2. Fetch Hospital Data (Mock API)
@@ -39,32 +47,130 @@ emergency_map = {"Low": 0, "Medium": 1, "High": 2}
 for h in hospital_data:
     h["emergency_load_encoded"] = emergency_map[h["emergency_load"]]
 
+
+def _is_valid_coord(lat, lon):
+    try:
+        if lat is None or lon is None:
+            return False
+        lat = float(lat)
+        lon = float(lon)
+        if pd.isna(lat) or pd.isna(lon):
+            return False
+        return -90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0
+    except Exception:
+        return False
+
+# Simple great-circle distance fallback (in kilometers)
+import math
+
+def _haversine_km(lat1, lon1, lat2, lon2):
+    R = 6371.0
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlambda = math.radians(lon2 - lon1)
+    a = math.sin(dphi/2.0)**2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda/2.0)**2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    return R * c
+
+DEFAULT_SPEED_KMH = 40.0
+
+def _get_location_ipapi():
+    try:
+        resp = requests.get("https://ipapi.co/json/", timeout=5)
+        if resp.status_code == 200:
+            data = resp.json()
+            lat = data.get("latitude")
+            lon = data.get("longitude")
+            if lat is not None and lon is not None:
+                return float(lat), float(lon)
+    except Exception:
+        pass
+    return None, None
+
 # ----------------------------
 # 3. Helper Functions
 # ----------------------------
-def get_route_data_ors(start_lat, start_lon, end_lat, end_lon):
+@st.cache_data(show_spinner=False, ttl=600)
+def _ors_request_cached(start_lat, start_lon, end_lat, end_lon):
     headers = {"Authorization": ORS_API_KEY, "Content-Type": "application/json"}
     coords = [[start_lon, start_lat], [end_lon, end_lat]]
     body = {"coordinates": coords}
 
-    try:
-        response = requests.post(ORS_URL, json=body, headers=headers)
-        data = response.json()
-        summary = data["routes"][0]["summary"]
-        geometry = data["routes"][0]["geometry"]
+    max_retries = 3
+    backoff = 1.0
+    last_err = None
+    for _ in range(max_retries):
+        try:
+            response = requests.post(ORS_URL, json=body, headers=headers)
+            if response.status_code == 429:
+                retry_after = response.headers.get("Retry-After")
+                delay = float(retry_after) if retry_after else backoff
+                time.sleep(delay)
+                backoff = min(backoff * 2, 8.0)
+                continue
+            response.raise_for_status()
+            data = response.json()
+            routes = data.get("routes", [])
+            if not routes:
+                raise ValueError("No routes returned from ORS")
+            summary = routes[0]["summary"]
+            geometry = routes[0]["geometry"]
 
-        distance_km = round(summary["distance"] / 1000, 2)
-        duration_min = round(summary["duration"] / 60, 2)
-        return distance_km, duration_min, geometry
-    except Exception as e:
-        st.error(f"❌ ORS error: {e}")
+            distance_km = round(summary["distance"] / 1000, 2)
+            duration_min = round(summary["duration"] / 60, 2)
+            return distance_km, duration_min, geometry
+        except requests.exceptions.RequestException as e:
+            last_err = e
+            # If 429, try again with backoff
+            if hasattr(e, "response") and e.response is not None and e.response.status_code == 429:
+                retry_after = e.response.headers.get("Retry-After")
+                delay = float(retry_after) if retry_after else backoff
+                time.sleep(delay)
+                backoff = min(backoff * 2, 8.0)
+                continue
+            # For other HTTP/network errors do not retry
+            break
+        except Exception as e:
+            last_err = e
+            break
+
+    raise RuntimeError(f"ORS request failed after retries: {last_err}")
+
+
+def get_route_data_ors(start_lat, start_lon, end_lat, end_lon):
+    # Validate input coordinates before calling ORS
+    if not _is_valid_coord(start_lat, start_lon) or not _is_valid_coord(end_lat, end_lon):
         return None, None, None
+    # If start and end are effectively the same point, short-circuit
+    if abs(start_lat - end_lat) < 1e-5 and abs(start_lon - end_lon) < 1e-5:
+        return 0.0, 0.0, None
+
+    # Round coordinates to improve cache hit rate
+    r_start_lat = round(start_lat, 4)
+    r_start_lon = round(start_lon, 4)
+    r_end_lat = round(end_lat, 4)
+    r_end_lon = round(end_lon, 4)
+    try:
+        return _ors_request_cached(r_start_lat, r_start_lon, r_end_lat, r_end_lon)
+    except Exception as e:
+        msg = str(e)
+        if "400" in msg:
+            if not st.session_state.get("ors_400_warned", False):
+                st.warning("OpenRouteService rejected the request (400). Falling back to straight-line ETA for some hospitals.")
+                st.session_state["ors_400_warned"] = True
+        else:
+            if not st.session_state.get("ors_fallback_warned", False):
+                st.warning("Routing service error. Falling back to straight-line ETA for some hospitals.")
+                st.session_state["ors_fallback_warned"] = True
+        # Fallback ETA based on haversine distance and default speed
+        d_km = _haversine_km(start_lat, start_lon, end_lat, end_lon)
+        eta_min = round((d_km / DEFAULT_SPEED_KMH) * 60.0, 2) if DEFAULT_SPEED_KMH > 0 else None
+        return round(d_km, 2), eta_min, None
 
 def get_ml_eta(features_df):
     try:
-        X_train_cols_df = pd.read_csv("processed/X_train.csv", nrows=0)
-        expected_cols = X_train_cols_df.columns.tolist()
-        features_df = features_df[expected_cols]
+        features_df = features_df[EXPECTED_FEATURE_COLS]
         scaled_features = scaler.transform(features_df)
         return model.predict(scaled_features)[0]
     except Exception as e:
@@ -75,7 +181,9 @@ def get_weather_data(lat, lon):
     """Fetch real-time weather from OpenWeatherMap."""
     try:
         params = {"lat": lat, "lon": lon, "appid": WEATHER_API_KEY, "units": "metric"}
-        response = requests.get(WEATHER_URL, params=params).json()
+        resp = requests.get(WEATHER_URL, params=params)
+        resp.raise_for_status()
+        response = resp.json()
         temp = response["main"]["temp"]
         humidity = response["main"]["humidity"]
         condition = response["weather"][0]["main"].lower()
@@ -94,16 +202,30 @@ def get_weather_data(lat, lon):
         st.error(f"❌ Weather API error: {e}")
         return 30, 70, 0, "Clear"
 
-def evaluate_hospitals(amb_lat, amb_lon, temperature, humidity, weather_encoded):
+def evaluate_hospitals(amb_lat, amb_lon, temperature, humidity, weather_encoded, emergency_type, patient_condition):
     results = []
 
     ors_etas = []
     capacity_utilizations = []
     icu_beds_all = []
     emergency_all = []
+    facilities_match_scores = []
+    emergency_type_encoded_all = []
+    skipped_invalid = 0
 
     for hosp in hospital_data:
-        distance_km, ors_eta, geometry = get_route_data_ors(amb_lat, amb_lon, hosp["lat"], hosp["lon"])
+        try:
+            h_lat = float(hosp["lat"])
+            h_lon = float(hosp["lon"])
+        except Exception:
+            skipped_invalid += 1
+            continue
+
+        if not _is_valid_coord(amb_lat, amb_lon) or not _is_valid_coord(h_lat, h_lon):
+            skipped_invalid += 1
+            continue
+
+        distance_km, ors_eta, geometry = get_route_data_ors(amb_lat, amb_lon, h_lat, h_lon)
         if distance_km is None:
             continue
 
@@ -111,10 +233,19 @@ def evaluate_hospitals(amb_lat, amb_lon, temperature, humidity, weather_encoded)
         emergency_load_encoded = hosp["emergency_load_encoded"]
         capacity_utilization = hosp["capacity_utilization"]
 
+        # Calculate facilities match score (1 if patient_condition in hospital facilities, else 0)
+        facilities = hosp.get("facilities", "").lower()
+        match_score = 1 if patient_condition.lower() in facilities else 0
+
+        # Encode emergency type priority (High=2, Medium=1, Low=0)
+        emergency_type_encoded = {"Low": 0, "Medium": 1, "High": 2}.get(emergency_type, 0)
+
         ors_etas.append(ors_eta)
         capacity_utilizations.append(capacity_utilization)
         icu_beds_all.append(icu_beds)
         emergency_all.append(emergency_load_encoded)
+        facilities_match_scores.append(match_score)
+        emergency_type_encoded_all.append(emergency_type_encoded)
 
         hour = datetime.now().hour
         day_of_week = datetime.now().weekday()
@@ -123,8 +254,8 @@ def evaluate_hospitals(amb_lat, amb_lon, temperature, humidity, weather_encoded)
         input_data = pd.DataFrame([{
             "ambulance_lat": amb_lat,
             "ambulance_lon": amb_lon,
-            "hospital_lat": hosp["lat"],
-            "hospital_lon": hosp["lon"],
+            "hospital_lat": h_lat,
+            "hospital_lon": h_lon,
             "distance_km": distance_km,
             "temperature": temperature,
             "humidity": humidity,
@@ -134,7 +265,9 @@ def evaluate_hospitals(amb_lat, amb_lon, temperature, humidity, weather_encoded)
             "hour": hour,
             "day_of_week": day_of_week,
             "is_weekend": is_weekend,
-            "capacity_utilization": capacity_utilization
+            "capacity_utilization": capacity_utilization,
+            "emergency_type_encoded": emergency_type_encoded,
+            "patient_condition_encoded": 1 if match_score == 1 else 0
         }])
 
         ml_eta = get_ml_eta(input_data)
@@ -147,24 +280,47 @@ def evaluate_hospitals(amb_lat, amb_lon, temperature, humidity, weather_encoded)
             "ICU Beds": icu_beds,
             "Emergency Load": hosp["emergency_load"],
             "Capacity Utilization": capacity_utilization,
+            "Facilities Match": match_score,
+            "Emergency Type Priority": emergency_type_encoded,
             "Geometry": geometry
         })
 
+    if skipped_invalid > 0:
+        st.warning(f"Skipped {skipped_invalid} hospital(s) due to invalid coordinates.")
+    if not results or not ors_etas:
+        st.error("No routes available from ORS for the given inputs.")
+        return []
     min_eta, max_eta = min(ors_etas), max(ors_etas)
     min_cap, max_cap = min(capacity_utilizations), max(capacity_utilizations)
     min_icu, max_icu = min(icu_beds_all), max(icu_beds_all)
     min_em, max_em = min(emergency_all), max(emergency_all)
+    min_fac, max_fac = min(facilities_match_scores), max(facilities_match_scores)
+    min_etp, max_etp = min(emergency_type_encoded_all), max(emergency_type_encoded_all)
 
     final_results = []
-    for r in results:
+    for i, r in enumerate(results):
         norm_eta = (r["ORS ETA (min)"] - min_eta) / (max_eta - min_eta) if max_eta != min_eta else 0
         norm_cap = (r["Capacity Utilization"] - min_cap) / (max_cap - min_cap) if max_cap != min_cap else 0
         norm_em = (emergency_map[r["Emergency Load"]] - min_em) / (max_em - min_em) if max_em != min_em else 0
         norm_icu = 1 - ((r["ICU Beds"] - min_icu) / (max_icu - min_icu) if max_icu != min_icu else 0)
 
-        score = (0.4 * norm_eta) + (0.25 * norm_cap) + (0.2 * norm_em) + (0.15 * norm_icu)
+        # Adjust scoring based on emergency type
+        if emergency_type == "High":
+            # Prioritize ETA and ICU beds for high emergencies
+            score = (0.4 * norm_eta) + (0.2 * norm_cap) + (0.15 * norm_em) + (0.25 * norm_icu)
+        else:
+            # Standard scoring for Low/Medium emergencies
+            score = (0.3 * norm_eta) + (0.25 * norm_cap) + (0.2 * norm_em) + (0.25 * norm_icu)
+
         r["Score"] = round(score, 3)
         final_results.append(r)
+
+    # Filter to only include hospitals with facilities match
+    final_results = [r for r in final_results if r["Facilities Match"] == 1]
+
+    if not final_results:
+        st.warning("No hospitals found with facilities matching the patient's condition. Consider adjusting the patient condition or emergency type.")
+        return []
 
     final_results.sort(key=lambda x: x["Score"])
     return final_results
@@ -189,8 +345,171 @@ def plot_routes_map(results, amb_lat, amb_lon):
 st.title("🚑 Smart Ambulance Hospital Comparison (Real-Time)")
 
 st.sidebar.header("Ambulance Location")
-amb_lat = st.sidebar.number_input("Latitude", value=20.2961, format="%.6f")
-amb_lon = st.sidebar.number_input("Longitude", value=85.8245, format="%.6f")
+
+# Ensure default values exist in session state
+if "amb_lat" not in st.session_state:
+    st.session_state["amb_lat"] = 20.2961
+if "amb_lon" not in st.session_state:
+    st.session_state["amb_lon"] = 85.8245
+
+# ----------------------------
+# GPS Location (Browser-based)
+# ----------------------------
+st.sidebar.subheader("📍 GPS Location (from Browser)")
+
+location = streamlit_geolocation()
+
+if location and location["latitude"] and location["longitude"]:
+    gps_lat = float(location["latitude"])
+    gps_lon = float(location["longitude"])
+
+    # Update only if changed
+    if (
+        "gps_lat" not in st.session_state
+        or "gps_lon" not in st.session_state
+        or st.session_state["gps_lat"] != gps_lat
+        or st.session_state["gps_lon"] != gps_lon
+    ):
+        st.session_state["gps_lat"] = gps_lat
+        st.session_state["gps_lon"] = gps_lon
+        st.session_state["amb_lat"] = gps_lat
+        st.session_state["amb_lon"] = gps_lon
+        st.sidebar.success(f"GPS set: {gps_lat:.6f}, {gps_lon:.6f}")
+        st.rerun()
+else:
+    st.sidebar.info("Click the GPS button and allow browser permission.")
+
+# ----------------------------
+# Manual Input (Main Coordinates)
+# ----------------------------
+amb_lat = st.sidebar.number_input(
+    "Latitude",
+    value=st.session_state.get("amb_lat", 20.2961),
+    format="%.6f",
+    key="manual_lat",
+)
+amb_lon = st.sidebar.number_input(
+    "Longitude",
+    value=st.session_state.get("amb_lon", 85.8245),
+    format="%.6f",
+    key="manual_lon",
+)
+
+# Keep session synced
+st.session_state["amb_lat"] = amb_lat
+st.session_state["amb_lon"] = amb_lon
+
+# ----------------------------
+# IP-based Location Button
+# ----------------------------
+st.markdown("### 🌐 Get Location Automatically")
+
+if st.button("Use IP-based Location"):
+    try:
+        response = requests.get("https://ipinfo.io/json")
+        data = response.json()
+        if "loc" in data:
+            lat, lon = data["loc"].split(",")
+            lat, lon = float(lat), float(lon)
+            st.session_state["amb_lat"] = lat
+            st.session_state["amb_lon"] = lon
+            st.success(f"Location set to IP-based coordinates: ({lat}, {lon})")
+            st.rerun()
+        else:
+            st.error("Could not retrieve IP-based location.")
+    except Exception as e:
+        st.error(f"Error fetching IP location: {e}")
+
+# ----------------------------
+# Address Search Box
+# ----------------------------
+st.subheader("📍 Set Location by Address")
+
+address = st.text_input("Enter an address or place name", key="address_input")
+
+if st.button("🔍 Search Location"):
+    if address.strip() == "":
+        st.warning("Please enter a valid address.")
+    else:
+        try:
+            url = "https://nominatim.openstreetmap.org/search"
+            params = {"q": address, "format": "json"}
+            response = requests.get(url, params=params, headers={"User-Agent": "SmartAmbulanceApp"})
+            data = response.json()
+
+            if data:
+                lat = float(data[0]["lat"])
+                lon = float(data[0]["lon"])
+
+                st.session_state["amb_lat"] = lat
+                st.session_state["amb_lon"] = lon
+
+                st.success(f"Location found: {address} → ({lat}, {lon})")
+                st.rerun()
+            else:
+                st.error("Could not find that address. Try a more specific one.")
+        except Exception as e:
+            st.error(f"Error fetching location: {e}")
+# ----------------------------
+# Address Autocomplete + Live Map + Source Display
+# ----------------------------
+st.subheader("🏙️ Smart Address Autocomplete (Geoapify API)")
+
+GEOAPIFY_AUTOCOMPLETE_URL = "https://api.geoapify.com/v1/geocode/autocomplete"
+GEOAPIFY_API_KEY = "f1d47f2e83524c77860be16ccf5df3fe"  # ← replace with your key from https://myprojects.geoapify.com/
+
+if "loc_source" not in st.session_state:
+    st.session_state["loc_source"] = "Manual"
+
+search_text = st.text_input("Start typing an address...", key="autocomplete_input")
+
+suggestions = []
+if search_text.strip():
+    try:
+        params = {"text": search_text, "apiKey": GEOAPIFY_API_KEY, "limit": 5}
+        r = requests.get(GEOAPIFY_AUTOCOMPLETE_URL, params=params)
+        resp = r.json()
+        if "features" in resp:
+            suggestions = [f["properties"]["formatted"] for f in resp["features"]]
+    except Exception as e:
+        st.error(f"Autocomplete error: {e}")
+
+if suggestions:
+    selected = st.selectbox("Suggestions", suggestions, key="selected_suggestion")
+    if st.button("📍 Use Selected Address"):
+        try:
+            params2 = {"text": selected, "apiKey": GEOAPIFY_API_KEY, "limit": 1}
+            r2 = requests.get(GEOAPIFY_AUTOCOMPLETE_URL, params=params2)
+            resp2 = r2.json()
+            if resp2.get("features"):
+                prop = resp2["features"][0]["properties"]
+                lat = prop["lat"]
+                lon = prop["lon"]
+                st.session_state["amb_lat"] = lat
+                st.session_state["amb_lon"] = lon
+                st.session_state["loc_source"] = "Search (Autocomplete)"
+                st.success(f"✅ Location updated from Autocomplete: {selected}")
+                st.rerun()
+        except Exception as e:
+            st.error(f"Error using selected address: {e}")
+
+# --- Live Map Preview ---
+st.subheader("🗺️ Current Location Preview")
+st.map([{"lat": st.session_state["amb_lat"], "lon": st.session_state["amb_lon"]}])
+
+# --- Show current location source in sidebar ---
+st.sidebar.markdown(f"**📍 Location Source:** {st.session_state.get('loc_source', 'Manual')}")
+
+
+
+# ----------------------------
+
+# New inputs for emergency type and patient condition
+emergency_types = ["Low", "Medium", "High"]
+patient_conditions = ["ICU", "NICU", "Cancer Centre", "Cardiology", "Neurology", "Oncology", "Gastroenterology", "Urology", "Orthopaedics", "Emergency", "Trauma Center", "PET CT", "Advanced Surgery", "24x7 Pharmacy"]
+
+selected_emergency_type = st.sidebar.selectbox("Emergency Type", emergency_types, help="Select the urgency level: Low for non-critical, Medium for moderate, High for life-threatening emergencies.")
+selected_patient_condition = st.sidebar.selectbox("Patient Condition", patient_conditions, help="Select the primary medical condition to prioritize hospitals with matching facilities/treatments.")
 
 # Fetch real-time weather
 temperature, humidity, weather_encoded, condition = get_weather_data(amb_lat, amb_lon)
@@ -201,15 +520,20 @@ if "results" not in st.session_state:
     st.session_state.results = None
 if "ors_error" not in st.session_state:
     st.session_state.ors_error = None
+if "ors_400_warned" not in st.session_state:
+    st.session_state.ors_400_warned = False
+if "ors_fallback_warned" not in st.session_state:
+    st.session_state.ors_fallback_warned = False
 
 if st.button("Find Best Hospital"):
-    try:
-        results = evaluate_hospitals(amb_lat, amb_lon, temperature, humidity, weather_encoded)
-        st.session_state.results = results
-        st.session_state.ors_error = None
-    except Exception as e:
-        st.session_state.ors_error = str(e)
-        st.session_state.results = None
+    with st.spinner("Evaluating hospitals and predicting ETAs..."):
+        try:
+            results = evaluate_hospitals(amb_lat, amb_lon, temperature, humidity, weather_encoded, selected_emergency_type, selected_patient_condition)
+            st.session_state.results = results
+            st.session_state.ors_error = None
+        except Exception as e:
+            st.session_state.ors_error = str(e)
+            st.session_state.results = None
 
 if st.session_state.ors_error:
     st.error(f"❌ ORS Error: {st.session_state.ors_error}")
@@ -220,12 +544,25 @@ elif st.session_state.results:
                f"(ORS ETA: {best['ORS ETA (min)']} min, ML ETA: {best['ML ETA (min)']} min)")
 
     st.subheader("🏆 Hospital Ranking")
-    st.table(pd.DataFrame(st.session_state.results).drop(columns=["Geometry"]))
+    df_results = pd.DataFrame(st.session_state.results).drop(columns=["Geometry"])
+    st.dataframe(df_results, use_container_width=True)  # Improved for mobile responsiveness
 
+    # Tooltip for scoring formula
+    with st.expander("ℹ️ Scoring Formula Explanation"):
+        st.markdown("""
+        **Hospital scores are calculated based on the following weighted factors:**
+        - **ETA (Estimated Time of Arrival):** Lower ETA is better.
+        - **Capacity Utilization:** Lower utilization is better.
+        - **Emergency Load:** Lower load is better.
+        - **ICU Beds:** More beds are better.
+        
+        **Emergency Type Adjustments:**
+        - **High:** Prioritizes ETA and ICU beds more.
+        - **Medium/Low:** Balanced prioritization.
+        """)
+    
     st.subheader("🗺️ Routes")
     map_obj = plot_routes_map(st.session_state.results, amb_lat, amb_lon)
-    st.subheader("🗺️ Routes")
-    map_obj = plot_routes_map(results, amb_lat, amb_lon)
     map_html = map_obj._repr_html_()
-    components.html(map_html, height=500, width=700)
+    components.html(map_html, height=500, width=800)  # Adjusted width for better mobile responsiveness
 

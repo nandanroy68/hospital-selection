@@ -1,26 +1,26 @@
-name,latitude,longitude
-"Apollo Hospitals, Gajapati Nagar, Sainik school road, Bhubaneswar, Odisha, India",20.306233,85.833398
-"Manipal Hospitals (AMRI Hospitals), Khandagiri, Bhubaneswar, Odisha, India",20.2798,85.7729
-"Capital Hospital, Unit 6, Bhubaneswar, Odisha, India",20.26369,85.820925
-"AIIMS Bhubaneswar, Sijua, Patrapada, Bhubaneswar, Odisha, India",20.231518,85.77289
-"SUM Hospital, Kalinga Nagar, Bhubaneswar, Odisha, India",20.277045,85.763441
-"Utkal Hospital, Chandrasekharpur, Bhubaneswar, Odisha, India",20.32,85.8455
-"Kalinga Hospital, Chandrasekharpur, Bhubaneswar, Odisha, India",20.313684,85.818792
-"IMS and Sum Hospital, Kalinga Nagar, Near Sampur, Bhubaneswar, Odisha, India",20.282984,85.769598
-"Health Village Hospital, Nayapalli, Bhubaneswar, Odisha, India",20.294708,85.81648
-"Sunshine Hospitals, Laxmisagar, Bhubaneswar, Odisha, India",20.2529,85.8504
-"Odisha Comprehensive Cancer Center, Jagamara Road, Bhubaneswar, Odisha, India",20.2574,85.7877
-"Oasis Fertility, Jaydev Vihar, Bhubaneswar, Odisha, India",20.2989,85.8299
-"Hi Tech Medical College and Hospital, Pandara, Rasulgarh, Bhubaneswar, Odisha, India",20.3014,85.8821
-"Jagannath Hospital, Sahid Nagar, Bhubaneswar, Odisha, India",20.289989,85.844793
-"Neelachal Hospital Pvt Ltd, Unit 3, Kharvel Nagar, Bhubaneswar, Odisha, India",20.2754,85.8455
-"Usthi Hospital and Research Center, Nayapalli, Bhubaneswar, Odisha, India",20.2941,85.8143
-"Shree Hospitals, Lewis Road, Bhubaneswar, Odisha, India",20.258,85.8407
-"Care Hospitals, Prachi Enclave, Chandrasekharpur, Bhubaneswar, Odisha, India",20.308,85.8211
-"Kanungo Institute Of Diabetes Specialities Pvt Ltd, Dumduma, Bhubaneswar, Odisha, India",20.2447,85.7801
-"Regional Medical Research Centre, Chandrasekharpur, Bhubaneswar, Odisha, India",20.31666,85.81952
-"ESIC Model Hospital, Chandrasekharpur, Bhubaneswar, Odisha, India",20.301,85.8214
-"L V Prasad Eye Institute, Patia, Bhubaneswar, Odisha, India",20.346345,85.81616
-"Kar Vision Eye Hospital, Sahid Nagar, Bhubaneswar, Odisha, India",20.2819,85.8446
-"Vivekananda Hospital, Fire Station Square, Baramunda Colony, Bhubaneswar, Odisha, India",20.2721,85.8105
-"Sparsh Hospital, Saheed Nagar, Bhubaneswar, Odisha, India",20.2821,85.8431
+name,latitude,longitude,facilities
+"Apollo Hospitals, Gajapati Nagar, Sainik school road, Bhubaneswar, Odisha, India",20.306233,85.833398,"ICU, NICU, Cancer Centre, Cardiology, Neurology, Oncology, Gastroenterology, Urology, Orthopaedics, Emergency, Trauma Center, PET CT, Advanced Surgery, 24x7 Pharmacy"
+"Manipal Hospitals (AMRI Hospitals), Khandagiri, Bhubaneswar, Odisha, India",20.2798,85.7729,"ICU, Cardiothoracic Units, Pulmonary ICU, Radiology, Imaging, Pathology, Eye Care, ENT, Dental, Gastronomy, Nephrology, MRI, CT Scan, Blood Bank, Ambulance, International Patient Support"
+"Capital Hospital, Unit 6, Bhubaneswar, Odisha, India",20.26369,85.820925,"ICU, Emergency, Three Tier Specialist Service, Operation Theatre, Ambulance, X-Ray, Hospital Delivery, Blood Bank, Pediatrics, Cardiology, Neurology, Nephrology, Orthopedics, Radiology"
+"AIIMS Bhubaneswar, Sijua, Patrapada, Bhubaneswar, Odisha, India",20.231518,85.77289,"Multispeciality, 43 Departments, Trauma Centre, Burn Speciality, Private Beds, Disaster Beds, Surgery, Telemedicine, COVID Care, Plasma Therapy, Convalescent Care, Diagnostics"
+"SUM Hospital, Kalinga Nagar, Bhubaneswar, Odisha, India",20.277045,85.763441,"ICU, PICU, NICU, MICU, Burn ICU, Cardiac Sciences, Neurology, Oncology, Gastroenterology, Nephrology, Organ Transplantation, Robotic Surgery, Modular OT, Diagnostics, 24x7 Emergency"
+"Utkal Hospital, Chandrasekharpur, Bhubaneswar, Odisha, India",20.32,85.8455,"ICU, Modular Operation Theatres, 24x7 Emergency, Diagnostics, CT/MRI, Dialysis, Adult/Neonatal/Pediatric ICU, Blood Bank, In-house Pharmacy, Ambulance"
+"Kalinga Hospital, Chandrasekharpur, Bhubaneswar, Odisha, India",20.313684,85.818792,"ICU, Trauma Care, Cardiac Surgery, Dialysis, Kidney Transplant, Gastroenterology, Orthopaedics, Endospine Surgery, Diagnostics (EP Study, CT, MRI), Ambulance, Blood Bank, Emergency"
+"IMS and Sum Hospital, Kalinga Nagar, Near Sampur, Bhubaneswar, Odisha, India",20.282984,85.769598,"ICU, PICU, NICU, MICU, Cardiac, Neurology, Organ Transplant, Oncology, Robotic Surgery, Modular OT, Diagnostics, Blood Bank, 24x7 Emergency, Pediatrics"
+"Health Village Hospital, Nayapalli, Bhubaneswar, Odisha, India",20.294708,85.81648,"ICU, Cardiology, Neurology, Gastroenterology, Pathology, Radiology, 24x7 Emergency, Lab Services, OT, Dialysis"
+"Sunshine Hospitals, Laxmisagar, Bhubaneswar, Odisha, India",20.2529,85.8504,"ICU, Emergency, Cardiology, Orthopaedics, Neurology, Trauma Care, Surgery, Diagnostics"
+"Odisha Comprehensive Cancer Center, Jagamara Road, Bhubaneswar, Odisha, India",20.2574,85.7877,"Cancer Care, Radiation Therapy, Chemotherapy, Diagnostics, Surgery"
+"Oasis Fertility, Jaydev Vihar, Bhubaneswar, Odisha, India",20.2989,85.8299,"IVF, Fertility Treatments, Gynecology, Andrology, Counseling, Diagnostics"
+"Hi Tech Medical College and Hospital, Pandara, Rasulgarh, Bhubaneswar, Odisha, India",20.3014,85.8821,"ICU, Emergency, Surgery, Pediatrics, Diagnostics, Orthopaedics, Radiology"
+"Jagannath Hospital, Sahid Nagar, Bhubaneswar, Odisha, India",20.289989,85.844793,"ICU, General Surgery, Gynecology, Orthopaedics, Diagnostics, Emergency"
+"Neelachal Hospital Pvt Ltd, Unit 3, Kharvel Nagar, Bhubaneswar, Odisha, India",20.2754,85.8455,"ICU, Cardiology, General Surgery, Pediatrics, Diagnostics, Emergency"
+"Usthi Hospital and Research Center, Nayapalli, Bhubaneswar, Odisha, India",20.2941,85.8143,"ICU, Emergency, Surgery, General Medicine, Diagnostics"
+"Shree Hospitals, Lewis Road, Bhubaneswar, Odisha, India",20.258,85.8407,"ICU, General Surgery, Pediatrics, Radiology, Gynecology, Diagnostics"
+"Care Hospitals, Prachi Enclave, Chandrasekharpur, Bhubaneswar, Odisha, India",20.308,85.8211,"ICU, Cardiology, Gastroenterology, Liver Transplant, Nephrology, Oncology, Emergency, Diagnostics"
+"Kanungo Institute Of Diabetes Specialities Pvt Ltd, Dumduma, Bhubaneswar, Odisha, India",20.2447,85.7801,"Diabetes Care, Endocrinology, Nephrology, Cardiology, General Medicine, Diagnostics"
+"Regional Medical Research Centre, Chandrasekharpur, Bhubaneswar, Odisha, India",20.31666,85.81952,"Medical Research, Lab Services, Diagnostics, Specialty Clinics"
+"ESIC Model Hospital, Chandrasekharpur, Bhubaneswar, Odisha, India",20.301,85.8214,"ICU, Emergency, Pediatrics, General Surgery, Orthopaedics, Radiology, Diagnostics"
+"L V Prasad Eye Institute, Patia, Bhubaneswar, Odisha, India",20.346345,85.81616,"Ophthalmology, Eye Surgery, Retina Clinic, Diagnostics, Cornea, Glaucoma, Emergency"
+"Kar Vision Eye Hospital, Sahid Nagar, Bhubaneswar, Odisha, India",20.2819,85.8446,"Ophthalmology, Eye Surgery, Retina Clinic, Diagnostics, Emergency"
+"Vivekananda Hospital, Fire Station Square, Baramunda Colony, Bhubaneswar, Odisha, India",20.2721,85.8105,"ICU, Pediatrics, General Surgery, Emergency, Orthopaedics, Diagnostics"
+"Sparsh Hospital, Saheed Nagar, Bhubaneswar, Odisha, India",20.2821,85.8431,"ICU, Emergency, Trauma Care, Cardiology, Surgery, Diagnostics"

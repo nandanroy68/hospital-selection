@@ -12,7 +12,8 @@ with open("hospitals.csv", "r", encoding="utf-8") as f:
         hospitals.append({
             "name": row["name"],
             "lat": float(row["latitude"]),
-            "lon": float(row["longitude"])
+            "lon": float(row["longitude"]),
+            "facilities": row.get("facilities", "")
         })
 
 @app.get("/hospitals")
@@ -31,6 +32,7 @@ def get_hospitals():
             "total_beds": total_beds,
             "icu_beds": icu_beds,
             "emergency_load": emergency_load,
-            "capacity_utilization": capacity_utilization
+            "capacity_utilization": capacity_utilization,
+            "facilities": h["facilities"]
         })
     return {"hospitals": hospital_status}
