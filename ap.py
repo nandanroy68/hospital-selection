@@ -346,159 +346,114 @@ st.title("🚑 Smart Ambulance Hospital Comparison (Real-Time)")
 
 st.sidebar.header("Ambulance Location")
 
-# Ensure default values exist in session state
+import streamlit as st
+import requests
+from streamlit_geolocation import streamlit_geolocation
+
+# ----------------------------
+# Initialize Session State
+# ----------------------------
+default_lat, default_lon = 20.2961, 85.8245
 if "amb_lat" not in st.session_state:
-    st.session_state["amb_lat"] = 20.2961
+    st.session_state["amb_lat"] = default_lat
 if "amb_lon" not in st.session_state:
-    st.session_state["amb_lon"] = 85.8245
+    st.session_state["amb_lon"] = default_lon
+if "source" not in st.session_state:
+    st.session_state["source"] = "Manual"
 
 # ----------------------------
-# GPS Location (Browser-based)
+# Sidebar Layout
 # ----------------------------
-st.sidebar.subheader("📍 GPS Location (from Browser)")
+st.sidebar.header("Ambulance Location")
 
+# GPS-based Location
+st.sidebar.subheader("📍 GPS Location (Browser)")
 location = streamlit_geolocation()
 
-if location and location["latitude"] and location["longitude"]:
-    gps_lat = float(location["latitude"])
-    gps_lon = float(location["longitude"])
-
-    # Update only if changed
-    if (
-        "gps_lat" not in st.session_state
-        or "gps_lon" not in st.session_state
-        or st.session_state["gps_lat"] != gps_lat
-        or st.session_state["gps_lon"] != gps_lon
-    ):
-        st.session_state["gps_lat"] = gps_lat
-        st.session_state["gps_lon"] = gps_lon
-        st.session_state["amb_lat"] = gps_lat
-        st.session_state["amb_lon"] = gps_lon
-        st.sidebar.success(f"GPS set: {gps_lat:.6f}, {gps_lon:.6f}")
+if location and location.get("latitude") and location.get("longitude"):
+    lat, lon = float(location["latitude"]), float(location["longitude"])
+    if (lat, lon) != (st.session_state["amb_lat"], st.session_state["amb_lon"]):
+        st.session_state["amb_lat"] = lat
+        st.session_state["amb_lon"] = lon
+        st.session_state["source"] = "GPS"
         st.rerun()
-else:
-    st.sidebar.info("Click the GPS button and allow browser permission.")
 
-# ----------------------------
-# Manual Input (Main Coordinates)
-# ----------------------------
-amb_lat = st.sidebar.number_input(
-    "Latitude",
-    value=st.session_state.get("amb_lat", 20.2961),
-    format="%.6f",
-    key="manual_lat",
-)
-amb_lon = st.sidebar.number_input(
-    "Longitude",
-    value=st.session_state.get("amb_lon", 85.8245),
-    format="%.6f",
-    key="manual_lon",
-)
-
-# Keep session synced
-st.session_state["amb_lat"] = amb_lat
-st.session_state["amb_lon"] = amb_lon
-
-# ----------------------------
-# IP-based Location Button
-# ----------------------------
-st.markdown("### 🌐 Get Location Automatically")
-
-if st.button("Use IP-based Location"):
+# IP-based Location
+st.sidebar.subheader("🌐 IP-based Location")
+if st.sidebar.button("Use IP-based Location"):
     try:
-        response = requests.get("https://ipinfo.io/json")
+        response = requests.get("https://ipinfo.io/json", timeout=5)
         data = response.json()
         if "loc" in data:
-            lat, lon = data["loc"].split(",")
-            lat, lon = float(lat), float(lon)
+            lat, lon = map(float, data["loc"].split(","))
             st.session_state["amb_lat"] = lat
             st.session_state["amb_lon"] = lon
-            st.success(f"Location set to IP-based coordinates: ({lat}, {lon})")
+            st.session_state["source"] = "IP"
             st.rerun()
         else:
-            st.error("Could not retrieve IP-based location.")
+            st.sidebar.error("Could not retrieve IP-based location.")
     except Exception as e:
-        st.error(f"Error fetching IP location: {e}")
+        st.sidebar.error(f"Error fetching IP location: {e}")
 
-# ----------------------------
-# Address Search Box
-# ----------------------------
-st.subheader("📍 Set Location by Address")
+# Search Box Location
+st.sidebar.subheader("🔍 Search by Address")
+address = st.sidebar.text_input("Enter address or place name")
 
-address = st.text_input("Enter an address or place name", key="address_input")
-
-if st.button("🔍 Search Location"):
-    if address.strip() == "":
-        st.warning("Please enter a valid address.")
+if st.sidebar.button("Search Location"):
+    if not address.strip():
+        st.sidebar.warning("Please enter a valid address.")
     else:
         try:
             url = "https://nominatim.openstreetmap.org/search"
             params = {"q": address, "format": "json"}
-            response = requests.get(url, params=params, headers={"User-Agent": "SmartAmbulanceApp"})
+            headers = {"User-Agent": "SmartAmbulanceApp"}
+            response = requests.get(url, params=params, headers=headers, timeout=5)
             data = response.json()
-
             if data:
-                lat = float(data[0]["lat"])
-                lon = float(data[0]["lon"])
-
+                lat, lon = float(data[0]["lat"]), float(data[0]["lon"])
                 st.session_state["amb_lat"] = lat
                 st.session_state["amb_lon"] = lon
-
-                st.success(f"Location found: {address} → ({lat}, {lon})")
+                st.session_state["source"] = "Search"
                 st.rerun()
             else:
-                st.error("Could not find that address. Try a more specific one.")
+                st.sidebar.error("Could not find that address.")
         except Exception as e:
-            st.error(f"Error fetching location: {e}")
+            st.sidebar.error(f"Error fetching location: {e}")
+
+# Manual Coordinate Entry
+st.sidebar.subheader("🧭 Manual Coordinates")
+
+# No fixed key — dynamic sync
+amb_lat = st.sidebar.number_input(
+    "Latitude",
+    value=st.session_state["amb_lat"],
+    key=f"lat_{st.session_state['source']}",
+    format="%.6f"
+)
+amb_lon = st.sidebar.number_input(
+    "Longitude",
+    value=st.session_state["amb_lon"],
+    key=f"lon_{st.session_state['source']}",
+    format="%.6f"
+)
+
+# If manually edited, update state
+if amb_lat != st.session_state["amb_lat"] or amb_lon != st.session_state["amb_lon"]:
+    st.session_state["amb_lat"] = amb_lat
+    st.session_state["amb_lon"] = amb_lon
+    st.session_state["source"] = "Manual"
+
 # ----------------------------
-# Address Autocomplete + Live Map + Source Display
+# Display Source + Map
 # ----------------------------
-st.subheader("🏙️ Smart Address Autocomplete (Geoapify API)")
+st.sidebar.markdown(f"### 📍 Source: **{st.session_state['source']}**")
+st.markdown("### 🗺 Current Ambulance Location")
 
-GEOAPIFY_AUTOCOMPLETE_URL = "https://api.geoapify.com/v1/geocode/autocomplete"
-GEOAPIFY_API_KEY = "f1d47f2e83524c77860be16ccf5df3fe"  # ← replace with your key from https://myprojects.geoapify.com/
-
-if "loc_source" not in st.session_state:
-    st.session_state["loc_source"] = "Manual"
-
-search_text = st.text_input("Start typing an address...", key="autocomplete_input")
-
-suggestions = []
-if search_text.strip():
-    try:
-        params = {"text": search_text, "apiKey": GEOAPIFY_API_KEY, "limit": 5}
-        r = requests.get(GEOAPIFY_AUTOCOMPLETE_URL, params=params)
-        resp = r.json()
-        if "features" in resp:
-            suggestions = [f["properties"]["formatted"] for f in resp["features"]]
-    except Exception as e:
-        st.error(f"Autocomplete error: {e}")
-
-if suggestions:
-    selected = st.selectbox("Suggestions", suggestions, key="selected_suggestion")
-    if st.button("📍 Use Selected Address"):
-        try:
-            params2 = {"text": selected, "apiKey": GEOAPIFY_API_KEY, "limit": 1}
-            r2 = requests.get(GEOAPIFY_AUTOCOMPLETE_URL, params=params2)
-            resp2 = r2.json()
-            if resp2.get("features"):
-                prop = resp2["features"][0]["properties"]
-                lat = prop["lat"]
-                lon = prop["lon"]
-                st.session_state["amb_lat"] = lat
-                st.session_state["amb_lon"] = lon
-                st.session_state["loc_source"] = "Search (Autocomplete)"
-                st.success(f"✅ Location updated from Autocomplete: {selected}")
-                st.rerun()
-        except Exception as e:
-            st.error(f"Error using selected address: {e}")
-
-# --- Live Map Preview ---
-st.subheader("🗺️ Current Location Preview")
-st.map([{"lat": st.session_state["amb_lat"], "lon": st.session_state["amb_lon"]}])
-
-# --- Show current location source in sidebar ---
-st.sidebar.markdown(f"**📍 Location Source:** {st.session_state.get('loc_source', 'Manual')}")
+st.map(
+    data=[{"lat": st.session_state["amb_lat"], "lon": st.session_state["amb_lon"]}],
+    zoom=12,
+    use_container_width=True
+)
 
 
 
