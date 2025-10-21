@@ -4,6 +4,10 @@ import csv
 
 app = FastAPI()
 
+@app.get("/")
+def read_root():
+    return {"message": "API is running"}
+
 # Load hospitals from CSV
 hospitals = []
 with open("hospitals.csv", "r", encoding="utf-8") as f:
