@@ -38,7 +38,7 @@ WEATHER_URL = "https://api.openweathermap.org/data/2.5/weather"
 # 2. Fetch Hospital Data (Mock API)
 # ----------------------------
 try:
-    hospital_data = requests.get("https://hospital-api-1-ob0v.onrender.com").json()["hospitals"]
+    hospital_data = requests.get("https://hospital-api-1-ob0v.onrender.com/hospitals").json()["hospitals"]
 except:
     st.error("❌ Could not fetch hospital API data. Make sure FastAPI is running.")
     st.stop()
