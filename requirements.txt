@@ -15,11 +15,11 @@ polyline
 # Geo utilities
 geopy
 
-# Machine learning (if you use ML scoring / XGBoost later)
+# Machine learning
 scikit-learn
 xgboost
 
-# Visualization (optional if you plot maps or charts later)
+# Visualization
 matplotlib
 folium
 streamlit_geolocation
